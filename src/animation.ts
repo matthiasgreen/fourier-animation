@@ -2,6 +2,7 @@ import { add, Complex, complex, pi, sqrt } from "mathjs";
 import { FourierSeries } from "./fourierSeries";
 import { CubicBezierSegment, LinearSegment, Path } from "./path";
 import { Converter, Point } from "./point";
+import defaultSvg from './assets/fourier.svg';
 
 export interface AnimationParams {
     unitFactor: number; // Units per canvas width
@@ -19,12 +20,12 @@ export class FourierAnimation {
     converter: Converter;
     drawingParser: DrawingParser;
 
-    startTime: number;
-
     path: Path;
     fourierSeries: FourierSeries;
 
     pointHistory: Point[];
+    prevTime: number;
+    t: number;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -33,7 +34,6 @@ export class FourierAnimation {
             throw new Error('Failed to get 2D context');
         }
         this.ctx = context;
-        this.startTime = Date.now();
         this.animationParams = {
             unitFactor: 5,
             seriesSize: 30,
@@ -46,33 +46,36 @@ export class FourierAnimation {
         this.pointHistory = [];
         this.drawingParser = new DrawingParser(this.setPath.bind(this));
         this.drawingParser.registerEvents(this.canvas);
-        // Start with a simple path using bezier and linear curves
+        
         this.path = new Path();
-        this.path.addSegment(new CubicBezierSegment(
-            {x: 100, y: 100},
-            {x: 150, y: 200},
-            {x: 200, y: 150},
-            {x: 200, y: 100}
-        ));
-        this.path.addSegment(new LinearSegment(
-            {x: 200, y: 200},
-            {x: 100, y: 100}
-        ));
-        this.fourierSeries.computeCoefficients(this.path, this.converter);
-    }
+        this.path.addSegment(new LinearSegment({x: 0, y: 0}, {x: 0, y: 0}));
 
-    public reset() {
-        this.startTime = Date.now();
-        // Wipe trail, recalculate coefficients, etc...
-        this.pointHistory = [];
+        this.prevTime = Date.now();
+        this.t = 0;
 
+        this.loadSVG(defaultSvg);
     }
 
     public updateParams(params: Partial<AnimationParams>) {
-        this.animationParams = {...this.animationParams, ...params};
-        this.converter = new Converter(this.canvas, this.animationParams.unitFactor);
-        this.fourierSeries = new FourierSeries(this.animationParams.seriesSize, this.animationParams.nSamples);
-        this.reset();
+        if (params.unitFactor) {
+            console.log("Not supported yet");
+        }
+        if (params.seriesSize) {
+            this.animationParams.seriesSize = params.seriesSize;
+            this.fourierSeries.setSeriesSize(params.seriesSize);
+            this.fourierSeries.computeCoefficients(this.path, this.converter);
+        }
+        if (params.historyLength) {
+            this.animationParams.historyLength = params.historyLength;
+        }
+        if (params.nSamples) {
+            this.animationParams.nSamples = params.nSamples;
+            this.fourierSeries.nSamples = params.nSamples;
+            this.fourierSeries.computeCoefficients(this.path, this.converter);
+        }
+        if (params.speed) {
+            this.animationParams.speed = params.speed
+        }
     }
 
     public resizeCanvas(height: number, width: number) {
@@ -92,11 +95,19 @@ export class FourierAnimation {
     public setPath(path: Path) {
         this.path = path;
         this.fourierSeries.computeCoefficients(this.path, this.converter);
-        this.reset();
+        this.pointHistory = [];
+    }
+
+    public async loadSVG(svg: string) {
+        const parser = new DOMParser();
+        const data = await fetch(svg).then(response => response.text());
+        const doc = parser.parseFromString(data, 'image/svg+xml');
+        const path = doc.getElementsByTagName('path')[0];
+        this.setPath(Path.fromSVGPathData(path.getAttribute('d') as string));
     }
 
     private drawPath() {
-        this.ctx.strokeStyle = "white";
+        this.ctx.strokeStyle = "gray";
         this.ctx.beginPath();
         this.path.draw(this.ctx);
         this.ctx.stroke();
@@ -105,7 +116,7 @@ export class FourierAnimation {
 
     private drawDrawing() {
         if (this.drawingParser.isDrawing) {
-            this.ctx.strokeStyle = "red";
+            this.ctx.strokeStyle = "white";
             this.ctx.beginPath();
             this.drawingParser.getPath().draw(this.ctx);
             this.ctx.stroke();
@@ -117,9 +128,11 @@ export class FourierAnimation {
         let point = complex(0, 0);
         let prevPoint = complex(0, 0);
 
-        const t = (Date.now() - this.startTime) / 100000 * this.animationParams.speed;
+        const dTime = Date.now() - this.prevTime;
+        this.prevTime = Date.now();
+        this.t = this.t + (dTime / 100000 * this.animationParams.speed);
 
-        for (const {coefficient, value} of this.fourierSeries.getSeriesTerms(t)) {
+        for (const {coefficient, value} of this.fourierSeries.getSeriesTerms(this.t)) {
             point = add(point, value) as Complex;
             this.ctx.strokeStyle = "red";
             this.ctx.lineWidth = 1;
@@ -208,8 +221,10 @@ class DrawingParser {
     }
 
     stopDrawing() {
-        this.isDrawing = false;
-        this.callback(this.getPath());
+        if (this.isDrawing) {
+            this.isDrawing = false;
+            this.callback(this.getPath());
+        }
     }
 
     getPath() {

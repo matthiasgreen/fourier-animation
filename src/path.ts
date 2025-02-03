@@ -1,3 +1,4 @@
+import { CommandM, SVGPathData } from "svg-pathdata";
 import { Point } from "./point";
 
 export interface PathSegment {
@@ -108,42 +109,25 @@ export class Path {
     }
 
     static fromSVGPathData(path: string): Path {
-        const elements = path.split(' ').filter(e => e.length > 0);
-        const segments: {type: string, args: number[]}[] = [];
-        let segStart = 0;
-        for (let i = 1; i < elements.length; i++) {
-            if (elements[i].match(/[A-Z]/)) {
-                const segment = {type: elements[segStart], args: elements.slice(segStart + 1, i).map(parseFloat)};
-                segments.push(segment);
-                segStart = i;
-            }
-        }
-        if (segments[0].type !== 'M' || segments[segments.length - 1].type !== 'Z') {
-            throw new Error('Path must start with M and end with Z');
-        }
+        const pathData = new SVGPathData(path).toAbs();
         const pathObj = new Path();
-        for (const segment of segments) {
-            const args = segment.args;
-            switch (segment.type) {
-                case 'M':
-                    // pathObj.addSegment(new LinearSegment({x: args[0], y: args[1]}, {x: args[0], y: args[1]}));
+
+        let prevPoint: Point = pathData.commands[0] as CommandM;
+        for (const command of pathData.commands) {
+            switch (command.type) {
+                case SVGPathData.MOVE_TO:
                     break;
-                case 'L':
-                    pathObj.addSegment(new LinearSegment({x: args[0], y: args[1]}, {x: args[2], y: args[3]}));
+                case SVGPathData.LINE_TO:
+                    pathObj.addSegment(new LinearSegment(prevPoint, {x: command.x, y: command.y}));
+                    prevPoint = {x: command.x, y: command.y};
                     break;
-                case 'C':
-                    pathObj.addSegment(new CubicBezierSegment({x: args[0], y: args[1]}, {x: args[2], y: args[3]}, {x: args[4], y: args[5]}, {x: args[6], y: args[7]}));
+                case SVGPathData.CURVE_TO:
+                    pathObj.addSegment(new CubicBezierSegment(prevPoint, {x: command.x1, y: command.y1}, {x: command.x2, y: command.y2}, {x: command.x, y: command.y}));
+                    prevPoint = {x: command.x, y: command.y};
                     break;
                 default:
-                    throw new Error(`Unsupported path segment type ${segment.type}`);
+                    console.warn(`Unsupported path segment type ${command.type}`);
             }
-        }
-        // Close the path
-        if (segments[0].args[0] !== segments[segments.length - 1].args[0] || segments[0].args[1] !== segments[segments.length - 1].args[1]) {
-            pathObj.addSegment(new LinearSegment(
-                {x: segments[segments.length - 1].args[0], y: segments[segments.length - 1].args[1]},
-                {x: segments[0].args[0], y: segments[0].args[1]}
-            ))
         }
         return pathObj;
     }

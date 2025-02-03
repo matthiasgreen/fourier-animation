@@ -1,15 +1,17 @@
 import './style.css'
-import { FourierAnimation } from '.';
+import { AnimationParams, FourierAnimation } from '.';
+import defaultSvg from './assets/fourier.svg';
+
+let animation: FourierAnimation | null = null;
 
 window.onload = () => {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
-    const animation = new FourierAnimation(canvas);
-    window.addEventListener('resize', () => animation.resizeCanvas(window.innerHeight, window.innerWidth));
+    animation = new FourierAnimation(canvas);
+    window.addEventListener('resize', () => animation?.resizeCanvas(window.innerHeight, window.innerWidth));
     animation.resizeCanvas(window.innerHeight, window.innerWidth);
     function animate() {
-        animation.renderFrame();
+        animation?.renderFrame();
         requestAnimationFrame(animate);
     }
-    
     animate();
 }

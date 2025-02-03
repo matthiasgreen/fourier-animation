@@ -7,15 +7,24 @@ export class FourierSeries {
     indices: number[];
     nSamples: number;
 
-    constructor(size: number, nSamples: number) {
-        this.coefficients = new Array(size*2-1).fill(complex(0, 0));
+    constructor(seriesSize: number, nSamples: number) {
+        this.coefficients = new Array(seriesSize*2-1).fill(complex(0, 0));
         // indices are 0, 1, -1, 2, -2, 3, -3, ...
         this.indices = [0];
-        for (let i = 1; i < size; i++) {
+        for (let i = 1; i < seriesSize; i++) {
             this.indices.push(i);
             this.indices.push(-i);
         }
         this.nSamples = nSamples;
+    }
+
+    setSeriesSize(seriesSize: number) {
+        this.coefficients = new Array(seriesSize*2-1).fill(complex(0, 0));
+        this.indices = [0];
+        for (let i = 1; i < seriesSize; i++) {
+            this.indices.push(i);
+            this.indices.push(-i);
+        }
     }
 
     enumerate() {
